@@ -51,10 +51,12 @@ class DevScanner(DefaultDelegate):
         contact_list = []
         motion_list = []
         param_list = []
+        plug_list = [] #追記
 
         pir_tip = ['No movement detected', 'Movement detected']
         hall_tip = ['Door closed', 'Door opened', 'Timeout no closed']
         light_tip = ['Dark', 'Bright']
+        plug_sw = ['Off', 'On'] #追記
 
         self.con = pexpect.spawn('hciconfig')
         pnum = self.con.expect(['hci0', pexpect.EOF, pexpect.TIMEOUT])
@@ -109,6 +111,10 @@ class DevScanner(DefaultDelegate):
                         # TODO:
                         diffSec = 0
                         param_list.extend([pirSta, lightSta, diffSec])
+                        
+                    elif (dev_type == b'j') or (dev_type == b'g') :
+                        print("do nothing")
+                    
                     else:
                         param_list[:] = []
                 elif desc == 'Local name':
@@ -131,6 +137,13 @@ class DevScanner(DefaultDelegate):
                     mac = dev.addr
                 elif desc == 'Manufacturer' and value[0:4] == company_id:
                     mac = dev.addr
+                    #以下追記
+                    #`xx:xx:xx:xx:xx:xx`はPlugMiniのBluetoothのMacアドレスを小文字表記で`:`で区切った値
+                    if( mac  == "xx:xx:xx:xx:xx:xx"):
+                        mode = 0
+                        power = (int(value[24:28].encode('utf-8'), 16) & 0x7fff) / 10.0;
+                        sw = int(value[18].encode('utf-8'), 16 ) >> 3;
+                        param_list.extend([sw, power])
 
             if mac != 0:
                 dev_list.append([mac, dev_type, copy.deepcopy(param_list)])
@@ -159,8 +172,12 @@ class DevScanner(DefaultDelegate):
             elif dev_type == b's':
                 motion_list.append([mac, 'Motion', "%s, %s" %
                                     (pir_tip[params[0]], light_tip[params[1]])])
+            elif (dev_type == b'j') or (dev_type == b'g'):
+                plug_list.append([mac, 'Plug', "%s, %.1fW", %
+                                    (plug_sw[params[0]], params[1])])
+                
         print('Scan timeout.')
-        return bot_list + meter_list + curtain_list + contact_list + motion_list
+        return bot_list + meter_list + curtain_list + contact_list + motion_list + plug_list
         pass
 
     def register_cb(self, fn):
